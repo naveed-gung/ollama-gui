@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama GPT-OSS GUI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Ollama GPT-OSS</h1>
+            <div id="status" class="status">
+                <span id="status-indicator" class="status-indicator"></span>
+                <span id="status-text">Checking connection...</span>
+            </div>
+        </header>
+
+        <div id="chat-container" class="chat-container">
+            <div id="messages" class="messages">
+                <div class="message assistant">
+                    <div class="message-content">
+                        <strong>Assistant:</strong> Hello! I'm GPT-OSS running through Ollama. How can I help you today?
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <textarea id="user-input" placeholder="Type your message here... (Press Ctrl+Enter to send)"
+                rows="3"></textarea>
+            <button id="send-btn" class="send-btn">
+                <span>Send</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+
+        <div class="footer">
+            <button id="clear-btn" class="secondary-btn">Clear Chat</button>
+            <button id="stream-toggle" class="secondary-btn">Streaming: OFF</button>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
