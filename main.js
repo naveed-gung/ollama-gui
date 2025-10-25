@@ -1,20 +1,23 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const axios = require('axios');
+const { exec } = require('child_process');
+const util = require('util');
+const execAsync = util.promisify(exec);
 
 let mainWindow;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1400,
+    height: 900,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     },
     titleBarStyle: 'default',
-    backgroundColor: '#1a1a1a'
+    backgroundColor: '#1e1e1e'
   });
 
   mainWindow.loadFile('index.html');
@@ -99,6 +102,25 @@ ipcMain.handle('check-ollama', async () => {
   try {
     await axios.get('http://localhost:11434/api/tags');
     return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle file dialogs
+ipcMain.handle('show-open-dialog', async (event, options) => {
+  return dialog.showOpenDialog(mainWindow, options);
+});
+
+ipcMain.handle('show-save-dialog', async (event, options) => {
+  return dialog.showSaveDialog(mainWindow, options);
+});
+
+// Handle terminal commands
+ipcMain.handle('exec-command', async (event, command) => {
+  try {
+    const { stdout, stderr } = await execAsync(command);
+    return { success: true, stdout, stderr };
   } catch (error) {
     return { success: false, error: error.message };
   }

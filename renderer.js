@@ -1,123 +1,203 @@
-let isStreaming = false;
-let streamingEnabled = false;
-let currentStreamMessage = null;
+let editor;
+let currentProjectPath = null;
+let currentFilePath = null;
 
 // DOM Elements
-const messagesContainer = document.getElementById('messages');
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
-const clearBtn = document.getElementById('clear-btn');
-const streamToggle = document.getElementById('stream-toggle');
+const newProjectBtn = document.getElementById('new-project-btn');
+const openProjectBtn = document.getElementById('open-project-btn');
+const uploadFilesBtn = document.getElementById('upload-files-btn');
+const saveFileBtn = document.getElementById('save-file-btn');
+const projectTree = document.getElementById('project-tree');
+const terminalInput = document.getElementById('terminal-input');
+const terminalOutput = document.getElementById('terminal-output');
+const outputContent = document.getElementById('output-content');
 const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
 
-// Check Ollama connection on startup
-async function checkConnection() {
-  const result = await window.electronAPI.checkOllama();
-  if (result.success) {
-    statusIndicator.classList.add('connected');
-    statusText.textContent = 'Connected to Ollama';
-  } else {
-    statusIndicator.classList.remove('connected');
-    statusText.textContent = 'Ollama not connected';
-    addMessage('assistant', 'Error: Cannot connect to Ollama. Make sure Ollama is running on localhost:11434');
+// Initialize Monaco Editor
+require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.45.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+  editor = monaco.editor.create(document.getElementById('editor-container'), {
+    value: '// Welcome to Ollama IDE Studio\n// Start coding here...',
+    language: 'javascript',
+    theme: 'vs-dark',
+    fontSize: 14,
+    minimap: { enabled: true },
+    scrollBeyondLastLine: false,
+    automaticLayout: true
+  });
+
+  // Listen for editor changes
+  editor.onDidChangeModelContent(() => {
+    updateStatus('Unsaved changes');
+  });
+});
+
+// Event Listeners
+newProjectBtn.addEventListener('click', createNewProject);
+openProjectBtn.addEventListener('click', openProject);
+uploadFilesBtn.addEventListener('click', uploadFiles);
+saveFileBtn.addEventListener('click', saveCurrentFile);
+
+terminalInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    executeCommand(terminalInput.value);
+    terminalInput.value = '';
+  }
+});
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+  });
+});
+
+// Functions
+async function createNewProject() {
+  const result = await window.electronAPI.showSaveDialog({
+    title: 'Create New Project',
+    properties: ['createDirectory']
+  });
+
+  if (!result.canceled) {
+    currentProjectPath = result.filePath;
+    await window.electronAPI.mkdir(currentProjectPath);
+    loadProjectTree();
+    updateStatus('New project created');
   }
 }
 
-// Add message to chat
-function addMessage(role, content) {
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${role}`;
-  
-  const contentDiv = document.createElement('div');
-  contentDiv.className = 'message-content';
-  contentDiv.innerHTML = `<strong>${role === 'user' ? 'You' : 'Assistant'}:</strong> ${content}`;
-  
-  messageDiv.appendChild(contentDiv);
-  messagesContainer.appendChild(messageDiv);
-  
-  // Scroll to bottom
-  messagesContainer.parentElement.scrollTop = messagesContainer.parentElement.scrollHeight;
-  
-  return messageDiv;
+async function openProject() {
+  const result = await window.electronAPI.showOpenDialog({
+    title: 'Open Project',
+    properties: ['openDirectory']
+  });
+
+  if (!result.canceled) {
+    currentProjectPath = result.filePaths[0];
+    loadProjectTree();
+    updateStatus('Project opened');
+  }
 }
 
-// Send message (non-streaming)
-async function sendMessage() {
-  const message = userInput.value.trim();
-  if (!message || isStreaming) return;
+async function uploadFiles() {
+  const result = await window.electronAPI.showOpenDialog({
+    title: 'Upload Files',
+    properties: ['openFile', 'multiSelections']
+  });
 
-  // Add user message
-  addMessage('user', message);
-  userInput.value = '';
+  if (!result.canceled && currentProjectPath) {
+    for (const filePath of result.filePaths) {
+      const fileName = window.electronAPI.path.basename(filePath);
+      const destPath = window.electronAPI.path.join(currentProjectPath, fileName);
+      const content = await window.electronAPI.readFile(filePath);
+      await window.electronAPI.writeFile(destPath, content);
+    }
+    loadProjectTree();
+    updateStatus('Files uploaded');
+  }
+}
 
-  // Disable send button and show loading
-  sendBtn.disabled = true;
-  sendBtn.innerHTML = '<span class="loading"></span>';
+async function saveCurrentFile() {
+  if (currentFilePath && editor) {
+    const content = editor.getValue();
+    await window.electronAPI.writeFile(currentFilePath, content);
+    updateStatus('File saved');
+  }
+}
 
-  if (streamingEnabled) {
-    // Use streaming
-    isStreaming = true;
-    currentStreamMessage = addMessage('assistant', '');
-    const contentDiv = currentStreamMessage.querySelector('.message-content');
-    let fullResponse = '';
+async function loadProjectTree() {
+  if (!currentProjectPath) return;
 
-    window.electronAPI.sendMessageStream(message);
+  projectTree.innerHTML = '';
 
-    window.electronAPI.onStreamChunk((chunk) => {
-      fullResponse += chunk;
-      contentDiv.innerHTML = `<strong>Assistant:</strong> ${fullResponse}`;
-      messagesContainer.parentElement.scrollTop = messagesContainer.parentElement.scrollHeight;
-    });
+  async function buildTree(dirPath, parentElement) {
+    try {
+      const items = await window.electronAPI.readdir(dirPath);
+      for (const item of items) {
+        const itemPath = window.electronAPI.path.join(dirPath, item.name);
+        const li = document.createElement('li');
+        li.textContent = item.name;
+        li.dataset.path = itemPath;
 
-    window.electronAPI.onStreamDone(() => {
-      isStreaming = false;
-      sendBtn.disabled = false;
-      sendBtn.innerHTML = '<span>Send</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-    });
+        if (item.isDirectory()) {
+          li.classList.add('folder');
+          li.addEventListener('click', () => {
+            li.classList.toggle('expanded');
+            const subUl = li.querySelector('ul');
+            if (subUl) {
+              subUl.style.display = subUl.style.display === 'none' ? 'block' : 'none';
+            } else {
+              const ul = document.createElement('ul');
+              li.appendChild(ul);
+              buildTree(itemPath, ul);
+            }
+          });
+        } else {
+          li.classList.add('file');
+          li.addEventListener('click', () => openFile(itemPath));
+        }
 
-    window.electronAPI.onStreamError((error) => {
-      isStreaming = false;
-      addMessage('assistant', `Error: ${error}`);
-      sendBtn.disabled = false;
-      sendBtn.innerHTML = '<span>Send</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
-    });
+        parentElement.appendChild(li);
+      }
+    } catch (error) {
+      console.error('Error loading directory:', error);
+    }
+  }
 
-  } else {
-    // Use non-streaming
-    const result = await window.electronAPI.sendMessage(message);
+  const rootUl = document.createElement('ul');
+  projectTree.appendChild(rootUl);
+  await buildTree(currentProjectPath, rootUl);
+}
 
-    if (result.success) {
-      addMessage('assistant', result.response);
-    } else {
-      addMessage('assistant', `Error: ${result.error}`);
+async function openFile(filePath) {
+  try {
+    const content = await window.electronAPI.readFile(filePath);
+    currentFilePath = filePath;
+    const ext = window.electronAPI.path.extname(filePath).toLowerCase();
+    let language = 'plaintext';
+
+    switch (ext) {
+      case '.js': language = 'javascript'; break;
+      case '.ts': language = 'typescript'; break;
+      case '.py': language = 'python'; break;
+      case '.html': language = 'html'; break;
+      case '.css': language = 'css'; break;
+      case '.json': language = 'json'; break;
+      case '.md': language = 'markdown'; break;
     }
 
-    // Re-enable send button
-    sendBtn.disabled = false;
-    sendBtn.innerHTML = '<span>Send</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
+    const model = monaco.editor.createModel(content, language);
+    editor.setModel(model);
+    updateStatus(`Opened ${window.electronAPI.path.basename(filePath)}`);
+  } catch (error) {
+    updateStatus('Error opening file');
   }
 }
 
-// Event listeners
-sendBtn.addEventListener('click', sendMessage);
-
-userInput.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === 'Enter') {
-    sendMessage();
+async function executeCommand(command) {
+  appendToTerminal(`> ${command}\n`);
+  const result = await window.electronAPI.execCommand(command);
+  if (result.success) {
+    appendToTerminal(result.stdout);
+    if (result.stderr) appendToTerminal(result.stderr);
+  } else {
+    appendToTerminal(`Error: ${result.error}\n`);
   }
-});
+}
 
-clearBtn.addEventListener('click', () => {
-  messagesContainer.innerHTML = '';
-  addMessage('assistant', 'Chat cleared. How can I help you?');
-});
+function appendToTerminal(text) {
+  terminalOutput.textContent += text;
+  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+}
 
-streamToggle.addEventListener('click', () => {
-  streamingEnabled = !streamingEnabled;
-  streamToggle.textContent = `Streaming: ${streamingEnabled ? 'ON' : 'OFF'}`;
-});
+function updateStatus(message) {
+  statusText.textContent = message;
+}
 
 // Initialize
-checkConnection();
-userInput.focus();
+updateStatus('Ready');

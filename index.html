@@ -4,45 +4,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ollama GPT-OSS GUI</title>
+    <title>Ollama IDE Studio</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
 </head>
 
 <body>
-    <div class="container">
-        <header>
-            <h1>🤖 Ollama GPT-OSS</h1>
-            <div id="status" class="status">
-                <span id="status-indicator" class="status-indicator"></span>
-                <span id="status-text">Checking connection...</span>
+    <div class="app">
+        <header class="toolbar">
+            <div class="toolbar-left">
+                <h1>🚀 Ollama IDE Studio</h1>
+            </div>
+            <div class="toolbar-center">
+                <button id="new-project-btn" class="btn">New Project</button>
+                <button id="open-project-btn" class="btn">Open Project</button>
+                <button id="upload-files-btn" class="btn">Upload Files</button>
+                <button id="save-file-btn" class="btn">Save</button>
+            </div>
+            <div class="toolbar-right">
+                <div id="status" class="status">
+                    <span id="status-indicator" class="status-indicator"></span>
+                    <span id="status-text">Ready</span>
+                </div>
             </div>
         </header>
 
-        <div id="chat-container" class="chat-container">
-            <div id="messages" class="messages">
-                <div class="message assistant">
-                    <div class="message-content">
-                        <strong>Assistant:</strong> Hello! I'm GPT-OSS running through Ollama. How can I help you today?
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Project Explorer</h3>
+                </div>
+                <div id="project-tree" class="project-tree">
+                    <!-- Project files will be loaded here -->
+                </div>
+            </aside>
+
+            <main class="editor-area">
+                <div id="editor-container" class="editor-container"></div>
+            </main>
+
+            <aside class="right-panel">
+                <div class="panel-tabs">
+                    <button class="tab active" data-tab="terminal">Terminal</button>
+                    <button class="tab" data-tab="output">Output</button>
+                </div>
+                <div id="terminal-panel" class="panel-content active">
+                    <div id="terminal-output" class="terminal-output"></div>
+                    <div class="terminal-input">
+                        <input type="text" id="terminal-input" placeholder="Enter command..." />
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="input-container">
-            <textarea id="user-input" placeholder="Type your message here... (Press Ctrl+Enter to send)"
-                rows="3"></textarea>
-            <button id="send-btn" class="send-btn">
-                <span>Send</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-            </button>
-        </div>
-
-        <div class="footer">
-            <button id="clear-btn" class="secondary-btn">Clear Chat</button>
-            <button id="stream-toggle" class="secondary-btn">Streaming: OFF</button>
+                <div id="output-panel" class="panel-content">
+                    <div id="output-content" class="output-content"></div>
+                </div>
+            </aside>
         </div>
     </div>
 
